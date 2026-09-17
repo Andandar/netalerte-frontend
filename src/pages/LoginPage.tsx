@@ -72,8 +72,10 @@ export default function LoginPage() {
               required
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full px-3 py-2 text-sm focus:outline-none"
+              className="w-full px-3 py-2 text-sm transition-colors focus:outline-none"
               style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.sm, color: COLORS.textDark }}
+              onFocus={(event) => (event.currentTarget.style.borderColor = COLORS.primary)}
+              onBlur={(event) => (event.currentTarget.style.borderColor = COLORS.border)}
             />
           </div>
 
@@ -88,8 +90,10 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full px-3 py-2 text-sm focus:outline-none"
+              className="w-full px-3 py-2 text-sm transition-colors focus:outline-none"
               style={{ border: `1px solid ${COLORS.border}`, borderRadius: RADIUS.sm, color: COLORS.textDark }}
+              onFocus={(event) => (event.currentTarget.style.borderColor = COLORS.primary)}
+              onBlur={(event) => (event.currentTarget.style.borderColor = COLORS.border)}
             />
           </div>
 

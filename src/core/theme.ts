@@ -117,8 +117,8 @@ export const TRANSLATIONS = {
       settings: 'Paramètres',
     },
     // Login
-    loginTitle: 'Accès institutionnel',
-    loginSubtitle: 'Tableau de bord partenaire ART',
+    loginTitle: 'Espace Institutionnel ART',
+    loginSubtitle: 'Tableau de bord partenaire',
     email: 'Adresse email',
     password: 'Mot de passe',
     loginBtn: 'Se connecter',

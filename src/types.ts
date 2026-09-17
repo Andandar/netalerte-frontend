@@ -63,6 +63,29 @@ export interface LoginResponse {
   user: AuthUser
 }
 
+/** Forme brute renvoyée par GET /v1/stats/dashboard (backend). */
+export interface ApiDashboardStats {
+  kpis: {
+    incidents_actifs: number
+    signalements_24h: number
+    disponibilite_7j: number
+    contributeurs_actifs: number
+  }
+  trend: { date: string; MTN: number; Orange: number; Camtel: number }[]
+  severity: { name: string; value: number }[]
+}
+
+/** Un élément de GET /v1/stats/top-zones (backend). */
+export interface ApiTopZone {
+  rank: number
+  geohash: string
+  zone: string
+  region: string
+  incidents: number
+  operateurDominant: Operator | null
+  dureeMoyenneHeures: number | null
+}
+
 /** Forme brute d'un signalement renvoyé par GET /v1/reports (backend, camelCase). */
 export interface ApiReport {
   id: string
