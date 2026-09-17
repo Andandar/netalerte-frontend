@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="NetAlerte CM">
+  <rect width="512" height="512" fill="#2540E0"/>
+  <path d="M160 404 L92 344" fill="none" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="88" stroke-linecap="round"/>
+  <g fill="none" stroke="#FFFFFF" stroke-width="88" stroke-linecap="round">
+    <path d="M276 404 L276 236"/>
+    <path d="M420 404 L420 108"/>
+  </g>
+</svg>
