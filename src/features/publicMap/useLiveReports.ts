@@ -13,6 +13,13 @@ interface PublicReport {
   comment: string | null
   latitude: number
   longitude: number
+  /**
+   * Nom de quartier/ville (ex. "Bastos, Yaoundé"), résolu côté serveur par
+   * reverse-geocoding sur la position déjà anonymisée — jamais sur le GPS
+   * exact. `null` tant que non résolu (voir stream.ts) : on retombe alors sur
+   * le département calculé localement ci-dessous.
+   */
+  locationName: string | null
   createdAt: string
 }
 
@@ -71,14 +78,18 @@ function resolveZone(lat: number, lng: number): { regionName: string; department
 }
 
 /**
- * Contrairement à la simulation qu'elle remplace, on ne connaît jamais le
- * quartier/la commune exacte d'un vrai signalement (seule sa position
- * anonymisée à ~1 km près est connue) — le libellé se limite donc au
- * département (ou à la région si le département n'a pas pu être résolu).
+ * Le nom de quartier/ville résolu côté serveur (Nominatim, sur la position
+ * déjà anonymisée) est préféré quand disponible — sinon repli sur le
+ * département/la région calculés localement par point-dans-polygone.
  */
-function buildLocationText(regionName: string, departmentName: string | null, operateur: PublicOperator): string {
-  const lieu = departmentName ?? regionName
-  return departmentName ? `${lieu}, ${regionName}, ${operateur}` : `${lieu}, ${operateur}`
+function buildLocationText(
+  regionName: string,
+  departmentName: string | null,
+  locationName: string | null,
+  operateur: PublicOperator,
+): string {
+  const lieu = locationName ?? departmentName ?? regionName
+  return lieu !== regionName ? `${lieu}, ${regionName}, ${operateur}` : `${lieu}, ${operateur}`
 }
 
 function toSignal(report: PublicReport): Signal {
@@ -91,7 +102,7 @@ function toSignal(report: PublicReport): Signal {
     catKey: report.issueType as ProblemCategory,
     operateur,
     comment: report.comment,
-    locationText: buildLocationText(regionName, departmentName, operateur),
+    locationText: buildLocationText(regionName, departmentName, report.locationName, operateur),
     createdAt: new Date(report.createdAt).getTime(),
   }
 }
