@@ -41,15 +41,6 @@ const DISPONIBILITE_SEUIL_VERT = 95
 const PERIOD_OPTIONS = [7, 30, 90] as const
 type PeriodDays = (typeof PERIOD_OPTIONS)[number]
 
-/**
- * Centre du donut de gravité, en % de la largeur du graphique — partagé entre
- * le `<Pie>` (prop `cx`) et le label superposé par-dessus, pour qu'ils restent
- * alignés exactement quelle que soit la largeur du conteneur (la légende prend
- * le reste de l'espace à droite). Un `w-[60%]` approximatif sur le conteneur
- * du label ne garantit pas cet alignement — cette valeur unique si.
- */
-const DONUT_CENTER_X = '38%'
-
 function formatShortDate(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -318,48 +309,57 @@ export default function DashboardPage() {
                 Aucun incident actif.
               </p>
             ) : (
-              <div className="relative">
-                <ResponsiveContainer width="100%" height={280}>
-                  <PieChart>
-                    <Pie
-                      data={stats.severity}
-                      dataKey="value"
-                      nameKey="name"
-                      cx={DONUT_CENTER_X}
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      startAngle={90}
-                      endAngle={-269.99}
-                    >
-                      {stats.severity.map((entry) => (
-                        <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] ?? COLORS.textLight} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                      formatter={(value: string) => {
-                        const entry = stats.severity.find((s) => s.name === value)
-                        const pct = entry && totalSeverity > 0 ? Math.round((entry.value / totalSeverity) * 100) : 0
-                        return `${value} — ${pct}%`
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div
-                  className="pointer-events-none absolute flex flex-col items-center justify-center"
-                  style={{ left: DONUT_CENTER_X, top: '50%', transform: 'translate(-50%, -50%)' }}
-                >
-                  <span className="text-2xl font-bold" style={{ color: COLORS.textDark }}>
-                    {totalSeverity}
-                  </span>
-                  <span className="text-xs" style={{ color: COLORS.textLight }}>
-                    incidents
-                  </span>
+              <div className="flex flex-col items-center">
+                {/* Légende rendue à la main en dessous (plutôt que via <Legend
+                    align="right">), pour pouvoir centrer l'anneau sur cx="50%"
+                    sans deviner la largeur que la légende va occuper — un
+                    <Legend> latéral de Recharts se superpose au SVG sans
+                    réduire sa zone de dessin, donc "cx" ne peut pas tenir
+                    compte de sa largeur de façon fiable. */}
+                <div className="relative w-full">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={stats.severity}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        startAngle={90}
+                        endAngle={-269.99}
+                      >
+                        {stats.severity.map((entry) => (
+                          <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] ?? COLORS.textLight} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold" style={{ color: COLORS.textDark }}>
+                      {totalSeverity}
+                    </span>
+                    <span className="text-xs" style={{ color: COLORS.textLight }}>
+                      incidents
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+                  {stats.severity.map((entry) => {
+                    const pct = totalSeverity > 0 ? Math.round((entry.value / totalSeverity) * 100) : 0
+                    return (
+                      <span key={entry.name} className="flex items-center gap-1.5 text-sm" style={{ color: COLORS.textMedium }}>
+                        <span
+                          className="h-2.5 w-2.5 flex-none"
+                          style={{ background: SEVERITY_COLORS[entry.name] ?? COLORS.textLight, borderRadius: RADIUS.sm }}
+                        />
+                        {entry.name} — {pct}%
+                      </span>
+                    )
+                  })}
                 </div>
               </div>
             )}
