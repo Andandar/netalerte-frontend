@@ -38,6 +38,18 @@ const SEVERITY_COLORS: Record<string, string> = {
 
 const DISPONIBILITE_SEUIL_VERT = 95
 
+const PERIOD_OPTIONS = [7, 30, 90] as const
+type PeriodDays = (typeof PERIOD_OPTIONS)[number]
+
+/**
+ * Centre du donut de gravité, en % de la largeur du graphique — partagé entre
+ * le `<Pie>` (prop `cx`) et le label superposé par-dessus, pour qu'ils restent
+ * alignés exactement quelle que soit la largeur du conteneur (la légende prend
+ * le reste de l'espace à droite). Un `w-[60%]` approximatif sur le conteneur
+ * du label ne garantit pas cet alignement — cette valeur unique si.
+ */
+const DONUT_CENTER_X = '38%'
+
 function formatShortDate(value: string): string {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -55,6 +67,9 @@ export default function DashboardPage() {
   const [topZones, setTopZones] = useState<ApiTopZone[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [periodDays, setPeriodDays] = useState<PeriodDays>(7)
+  const [operatorFilter, setOperatorFilter] = useState<Operator | 'all'>('all')
+  const [exporting, setExporting] = useState(false)
 
   // Un compte "operator" (MTN/Orange/Camtel) est scopé à son propre opérateur
   // côté backend (voir applyDataFilter) : les autres opérateurs n'apparaissent
@@ -67,12 +82,14 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false
+    const params: Record<string, string> = { days: String(periodDays) }
+    if (operatorFilter !== 'all') params.operator = operatorFilter
 
     async function load(attempt = 1): Promise<void> {
       try {
         const [statsRes, zonesRes] = await Promise.all([
-          api.get<ApiDashboardStats>('/stats/dashboard'),
-          api.get<{ items: ApiTopZone[] }>('/stats/top-zones'),
+          api.get<ApiDashboardStats>('/stats/dashboard', { params }),
+          api.get<{ items: ApiTopZone[] }>('/stats/top-zones', { params }),
         ])
         if (cancelled) return
         setStats(statsRes.data)
@@ -97,13 +114,35 @@ export default function DashboardPage() {
       }
     }
 
+    setLoading(true)
     load()
     const interval = window.setInterval(() => load(), POLL_INTERVAL_MS)
     return () => {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [])
+  }, [periodDays, operatorFilter])
+
+  async function handleExport(): Promise<void> {
+    setExporting(true)
+    try {
+      const params: Record<string, string> = { days: String(periodDays) }
+      if (operatorFilter !== 'all') params.operator = operatorFilter
+      const response = await api.get('/reports/export', { params, responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `netalerte-signalements-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setError("Impossible d'exporter les données. Réessaie dans un instant.")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -159,6 +198,64 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* FILTRES */}
+        <div
+          className="mb-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ background: COLORS.bgCard, borderRadius: RADIUS.lg, boxShadow: SHADOWS.card }}
+        >
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-1 p-1" style={{ background: COLORS.bgPage, borderRadius: RADIUS.md }}>
+              {PERIOD_OPTIONS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setPeriodDays(days)}
+                  className="px-3 py-1.5 text-sm font-semibold transition-colors"
+                  style={{
+                    borderRadius: RADIUS.sm,
+                    background: periodDays === days ? COLORS.primary : 'transparent',
+                    color: periodDays === days ? COLORS.textWhite : COLORS.textMedium,
+                  }}
+                >
+                  {days} jours
+                </button>
+              ))}
+            </div>
+
+            {/* Un compte "operator" est déjà cantonné à son propre opérateur côté
+                serveur (voir visibleOperators ci-dessus) — lui montrer un sélecteur
+                qu'il ne peut pas utiliser n'aurait pas de sens. */}
+            {user?.role !== 'operator' && (
+              <label className="flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.textMedium }}>
+                Opérateur
+                <select
+                  value={operatorFilter}
+                  onChange={(event) => setOperatorFilter(event.target.value as Operator | 'all')}
+                  className="px-3 py-1.5 text-sm font-semibold"
+                  style={{ background: COLORS.bgPage, color: COLORS.textDark, borderRadius: RADIUS.sm, border: `1px solid ${COLORS.border}` }}
+                >
+                  <option value="all">Tous</option>
+                  {ALL_OPERATORS.map((operator) => (
+                    <option key={operator} value={operator}>
+                      {OPERATOR_CONFIG[operator].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="w-fit px-4 py-2 text-sm font-semibold transition-opacity disabled:opacity-60"
+            style={{ background: COLORS.primary, color: COLORS.textWhite, borderRadius: RADIUS.sm }}
+          >
+            {exporting ? 'Export en cours…' : 'Exporter CSV'}
+          </button>
+        </div>
+
         {/* KPI */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {loading || !stats ? (
@@ -168,9 +265,9 @@ export default function DashboardPage() {
               <KpiCard label="Incidents actifs" value={stats.kpis.incidents_actifs} color="blue" icon={<AlertIcon className="h-6 w-6" />} />
               <KpiCard label="Signalements 24h" value={stats.kpis.signalements_24h} color="green" icon={<ReportIcon className="h-6 w-6" />} />
               <KpiCard
-                label="Disponibilité 7j"
-                value={`${stats.kpis.disponibilite_7j}%`}
-                color={stats.kpis.disponibilite_7j >= DISPONIBILITE_SEUIL_VERT ? 'green' : 'red'}
+                label={`Disponibilité ${periodDays}j`}
+                value={`${stats.kpis.disponibilite}%`}
+                color={stats.kpis.disponibilite >= DISPONIBILITE_SEUIL_VERT ? 'green' : 'red'}
                 icon={<NetworkIcon className="h-6 w-6" />}
               />
               <KpiCard label="Contributeurs actifs" value={stats.kpis.contributeurs_actifs} color="blue" icon={<UsersIcon className="h-6 w-6" />} />
@@ -182,7 +279,7 @@ export default function DashboardPage() {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[60%_40%]">
           <div className="p-5" style={{ background: COLORS.bgCard, borderRadius: RADIUS.lg, boxShadow: SHADOWS.card }}>
             <h2 className="mb-4 text-base font-semibold" style={{ color: COLORS.textDark }}>
-              Évolution des signalements — 7 derniers jours
+              Évolution des signalements — {periodDays} derniers jours
             </h2>
             {loading || !stats ? (
               <SkeletonBlock className="h-[280px]" />
@@ -228,6 +325,8 @@ export default function DashboardPage() {
                       data={stats.severity}
                       dataKey="value"
                       nameKey="name"
+                      cx={DONUT_CENTER_X}
+                      cy="50%"
                       innerRadius={60}
                       outerRadius={100}
                       paddingAngle={2}
@@ -251,7 +350,10 @@ export default function DashboardPage() {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="pointer-events-none absolute top-0 left-0 flex h-full w-[60%] flex-col items-center justify-center">
+                <div
+                  className="pointer-events-none absolute flex flex-col items-center justify-center"
+                  style={{ left: DONUT_CENTER_X, top: '50%', transform: 'translate(-50%, -50%)' }}
+                >
                   <span className="text-2xl font-bold" style={{ color: COLORS.textDark }}>
                     {totalSeverity}
                   </span>
@@ -267,7 +369,7 @@ export default function DashboardPage() {
         {/* TOP ZONES */}
         <div className="mt-6 p-5" style={{ background: COLORS.bgCard, borderRadius: RADIUS.lg, boxShadow: SHADOWS.card }}>
           <h2 className="mb-4 text-base font-semibold" style={{ color: COLORS.textDark }}>
-            Top 10 — Zones les plus affectées cette semaine
+            Top 10 — Zones les plus affectées ({periodDays} derniers jours)
           </h2>
           {loading ? (
             <div className="flex flex-col gap-2">
@@ -293,13 +395,13 @@ export default function DashboardPage() {
                     <th className="px-3 py-2 text-left font-medium" style={{ color: COLORS.textLight }}>
                       Région
                     </th>
-                    <th className="px-3 py-2 text-left font-medium" style={{ color: COLORS.textLight }}>
+                    <th className="px-3 py-2 text-right font-medium" style={{ color: COLORS.textLight }}>
                       Incidents
                     </th>
                     <th className="px-3 py-2 text-left font-medium" style={{ color: COLORS.textLight }}>
                       Opérateur dominant
                     </th>
-                    <th className="px-3 py-2 text-left font-medium" style={{ color: COLORS.textLight }}>
+                    <th className="px-3 py-2 text-right font-medium" style={{ color: COLORS.textLight }}>
                       Durée moy.
                     </th>
                   </tr>
@@ -321,7 +423,7 @@ export default function DashboardPage() {
                       <td className="px-3 py-2.5" style={{ color: COLORS.textMedium }}>
                         {zone.region}
                       </td>
-                      <td className="px-3 py-2.5 font-semibold" style={{ color: COLORS.textDark }}>
+                      <td className="px-3 py-2.5 text-right font-semibold" style={{ color: COLORS.textDark }}>
                         {zone.incidents}
                       </td>
                       <td className="px-3 py-2.5">
@@ -338,7 +440,7 @@ export default function DashboardPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5" style={{ color: COLORS.textMedium }}>
+                      <td className="px-3 py-2.5 text-right" style={{ color: COLORS.textMedium }}>
                         {zone.dureeMoyenneHeures != null ? `${zone.dureeMoyenneHeures} h` : '—'}
                       </td>
                     </tr>

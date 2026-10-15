@@ -65,10 +65,11 @@ export interface LoginResponse {
 
 /** Forme brute renvoyée par GET /v1/stats/dashboard (backend). */
 export interface ApiDashboardStats {
+  periodDays: number
   kpis: {
     incidents_actifs: number
     signalements_24h: number
-    disponibilite_7j: number
+    disponibilite: number
     contributeurs_actifs: number
   }
   trend: { date: string; MTN: number; Orange: number; Camtel: number }[]
